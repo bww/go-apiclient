@@ -256,12 +256,11 @@ func (c *Client) unmarshal(rsp *http.Response, req *http.Request, reqid int64, e
 
 // Perform a request. The client may mutate the parameter request.
 func (c *Client) Do(req *http.Request) (*http.Response, error) {
-	rsp, _, err := c.do(req)
-	return rsp, err
+	return c.RoundTrip(req)
 }
 
-// Perform a request. The client may mutate the parameter request.
-func (c *Client) do(req *http.Request) (*http.Response, int64, error) {
+// Route-trip a request. The client may mutate the parameter request.
+func (c *Client) RoundTrip(req *http.Request) (*http.Response, error) {
 	start := time.Now()
 	reqid := atomic.AddInt64(&reqctr, 1)
 	cxt := req.Context()
@@ -278,7 +277,7 @@ func (c *Client) do(req *http.Request) (*http.Response, int64, error) {
 	if c.auth != nil {
 		err := c.auth.Authorize(req)
 		if err != nil {
-			return nil, reqid, errutil.Redact(fmt.Errorf("Could not authorize request: %v", err), ErrCouldNotAuthorize)
+			return nil, errutil.Redact(fmt.Errorf("Could not authorize request: %v", err), ErrCouldNotAuthorize)
 		}
 	}
 	for k, v := range c.header {
@@ -295,7 +294,7 @@ func (c *Client) do(req *http.Request) (*http.Response, int64, error) {
 		}
 		next, err := l.Next(start, ratelimit.WithRequest(req))
 		if err != nil {
-			return nil, reqid, fmt.Errorf("Could not compute next rate-limited request window: %w", err)
+			return nil, fmt.Errorf("Could not compute next rate-limited request window: %w", err)
 		}
 		delay := next.Sub(time.Now())
 		rateLimitDelaySampler.With(metrics.Tags{"domain": domain}).Observe(float64(delay))
@@ -306,7 +305,7 @@ func (c *Client) do(req *http.Request) (*http.Response, int64, error) {
 			select {
 			case <-time.After(delay):
 			case <-cxt.Done():
-				return nil, reqid, context.Canceled
+				return nil, context.Canceled
 			}
 		}
 	}
@@ -322,7 +321,7 @@ func (c *Client) do(req *http.Request) (*http.Response, int64, error) {
 			defer req.Body.Close()
 			d, err := ioutil.ReadAll(req.Body)
 			if err != nil {
-				return nil, reqid, err
+				return nil, err
 			}
 			req.Body = ioutil.NopCloser(bytes.NewBuffer(d))
 			if len(d) > 0 {
@@ -336,7 +335,7 @@ retries:
 	for i := 0; ; i++ {
 		tsp, err := c.Client.Do(req)
 		if err != nil {
-			return nil, reqid, err
+			return nil, err
 		}
 		defer func() { // note that all these defers queue up and unravel on return
 			if tsp != nil { // if set, this temporary response never converted; clean up
@@ -351,7 +350,7 @@ retries:
 				var retry ratelimit.RetryError
 				if errors.As(rlerr, &retry) { // special handling for retries; insert a specific delay and re-perform the same request
 					if i >= maxRetries {
-						return nil, reqid, rlerr
+						return nil, rlerr
 					}
 					delay := retry.RetryAfter.Sub(time.Now())
 					rateLimitRetrySampler.With(metrics.Tags{"domain": domain}).Observe(float64(delay))
@@ -362,7 +361,7 @@ retries:
 					case <-time.After(delay):
 						continue retries
 					case <-cxt.Done():
-						return nil, reqid, context.Canceled
+						return nil, context.Canceled
 					}
 				}
 			}
@@ -385,17 +384,17 @@ retries:
 				case <-time.After(delay):
 					continue retries
 				case <-cxt.Done():
-					return nil, reqid, context.Canceled
+					return nil, context.Canceled
 				}
 			}
 		}
 
 		err = checkErr(reqid, req, tsp)
 		if err != nil { // first, check for non-2XX/application-level errors
-			return nil, reqid, err
+			return nil, err
 		}
 		if rlerr != nil { // second, handle any non-retry rate limiting errors that may have occurred
-			return nil, reqid, fmt.Errorf("api: [%06d] %v %v: rate limit error: %v", reqid, req.Method, req.URL, rlerr)
+			return nil, fmt.Errorf("api: [%06d] %v %v: rate limit error: %v", reqid, req.Method, req.URL, rlerr)
 		}
 
 		// the response will be returned; convert it and clear the temporary value
@@ -420,7 +419,7 @@ retries:
 		if c.isVerbose(req) {
 			d, err := ioutil.ReadAll(rsp.Body)
 			if err != nil {
-				return nil, reqid, err
+				return nil, err
 			}
 			if len(d) > 0 {
 				fmt.Println(text.Indent(string(d), "   < "))
@@ -429,7 +428,7 @@ retries:
 		}
 	}
 
-	return rsp, reqid, nil
+	return rsp, nil
 }
 
 func URLWithParams(s string, params interface{}) (string, error) {
