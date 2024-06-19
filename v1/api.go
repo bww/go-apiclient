@@ -214,13 +214,13 @@ func (c *Client) Delete(cxt context.Context, u string, input, output interface{}
 
 // Perform a request and attempt to unmarshal the response into an entity.
 func (c *Client) Exec(req *http.Request, entity interface{}, opts ...Option) (*http.Response, error) {
-	rsp, reqid, err := c.do(req)
+	rsp, err := c.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer rsp.Body.Close()
 	if entity != nil {
-		err = c.unmarshal(rsp, req, reqid, entity)
+		err = c.unmarshal(rsp, req, entity)
 		if err != nil {
 			return nil, err
 		}
@@ -230,7 +230,7 @@ func (c *Client) Exec(req *http.Request, entity interface{}, opts ...Option) (*h
 
 // Unmarshal the provided response into the provided entity. The caller must close
 // the response body, this method will not do so.
-func (c *Client) unmarshal(rsp *http.Response, req *http.Request, reqid int64, entity interface{}) error {
+func (c *Client) unmarshal(rsp *http.Response, req *http.Request, entity interface{}) error {
 	var ent *Entity
 	if c.isDebug(req) || c.isVerbose(req) {
 		data, err := ioutil.ReadAll(rsp.Body)
@@ -246,7 +246,6 @@ func (c *Client) unmarshal(rsp *http.Response, req *http.Request, reqid int64, e
 	err := Unmarshal(rsp, entity)
 	if err != nil {
 		return Errorf(rsp.StatusCode, "Could not unmarshal response").
-			SetId(reqid).
 			SetRequest(req).
 			SetEntity(ent).
 			SetCause(wrapErr(err, ErrCouldNotUnmarshalResponse))
