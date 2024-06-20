@@ -71,6 +71,29 @@ func WithBaseURL(base string) Option {
 	}
 }
 
+func WithHeader(key, val string) Option {
+	return func(c Config) Config {
+		if c.Header == nil {
+			c.Header = make(http.Header)
+		}
+		c.Header.Set(key, val)
+		return c
+	}
+}
+
+func WithHeaders(hdr http.Header) Option {
+	return func(c Config) Config {
+		if c.Header == nil {
+			c.Header = hdr
+		} else {
+			for k, v := range hdr {
+				c.Header[k] = v
+			}
+		}
+		return c
+	}
+}
+
 func WithDebug(on bool) Option {
 	return func(c Config) Config {
 		c.Debug, c.Verbose = on, on
