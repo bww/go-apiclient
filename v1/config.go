@@ -55,6 +55,13 @@ type Config struct {
 	Debug       bool
 }
 
+func (c Config) With(opts []Option) Config {
+	for _, opt := range opts {
+		c = opt(c)
+	}
+	return c
+}
+
 type Option func(Config) Config
 
 func WithAuthorizer(auth Authorizer) Option {

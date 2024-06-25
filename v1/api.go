@@ -214,11 +214,19 @@ func (c *Client) Delete(cxt context.Context, u string, input, output interface{}
 
 // Perform a request and attempt to unmarshal the response into an entity.
 func (c *Client) Exec(req *http.Request, entity interface{}, opts ...Option) (*http.Response, error) {
+	conf := Config{}.With(opts)
+	for k, v := range conf.Header {
+		for _, e := range v {
+			req.Header.Set(k, e)
+		}
+	}
+
 	rsp, err := c.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer rsp.Body.Close()
+
 	if entity != nil {
 		err = c.unmarshal(rsp, req, entity)
 		if err != nil {
