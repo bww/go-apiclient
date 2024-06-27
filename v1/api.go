@@ -284,7 +284,7 @@ func (c *Client) RoundTrip(req *http.Request) (*http.Response, error) {
 	if c.auth != nil {
 		err := c.auth.Authorize(req)
 		if err != nil {
-			return nil, errutil.Redact(fmt.Errorf("Could not authorize request: %v", err), ErrCouldNotAuthorize)
+			return nil, errutil.Redact(fmt.Errorf("Could not authorize request: %w", err), ErrCouldNotAuthorize)
 		}
 	}
 	for k, v := range c.header {
