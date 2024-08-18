@@ -13,8 +13,8 @@ import (
 	api "github.com/bww/go-apiclient/v1"
 
 	siter "github.com/bww/go-iterator/v1"
-	"github.com/bww/go-rest/v1"
-	"github.com/bww/go-router/v1"
+	"github.com/bww/go-rest/v2"
+	"github.com/bww/go-router/v2"
 	"github.com/bww/go-util/v1/debug"
 	"github.com/bww/go-util/v1/errors"
 	"github.com/stretchr/testify/assert"

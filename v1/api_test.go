@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/bww/go-ratelimit/v1"
-	"github.com/bww/go-rest/v1"
-	"github.com/bww/go-router/v1"
+	"github.com/bww/go-rest/v2"
+	"github.com/bww/go-router/v2"
 	"github.com/bww/go-util/v1/debug"
 	"github.com/stretchr/testify/assert"
 )
