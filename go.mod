@@ -9,7 +9,7 @@ require (
 	github.com/bww/go-ratelimit v0.2.4
 	github.com/bww/go-rest v1.9.0
 	github.com/bww/go-router v1.9.0
-	github.com/bww/go-util v1.34.0
+	github.com/bww/go-util v1.38.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/google/go-querystring v1.1.0
 	github.com/gorilla/schema v1.3.0
@@ -32,7 +32,7 @@ require (
 	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/sirupsen/logrus v1.6.0 // indirect
 	golang.org/x/net v0.20.0 // indirect
-	golang.org/x/sys v0.17.0 // indirect
+	golang.org/x/sys v0.18.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
