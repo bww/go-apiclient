@@ -5,9 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"reflect"
 	"sync/atomic"
 	"time"
@@ -15,7 +16,6 @@ import (
 	"github.com/bww/go-metrics/v1"
 	"github.com/bww/go-ratelimit/v1"
 	errutil "github.com/bww/go-util/v1/errors"
-	"github.com/bww/go-util/v1/text"
 	"github.com/dustin/go-humanize"
 	"github.com/google/go-querystring/query"
 )
@@ -151,10 +151,7 @@ func (c *Client) WithAuthorizer(a Authorizer) *Client {
 }
 
 func (c *Client) isVerbose(req *http.Request) bool {
-	if !c.debug.Verbose {
-		return false
-	}
-	return c.debug.Matches(req)
+	return c.isDebug(req) || c.debug.Verbose
 }
 
 func (c *Client) isDebug(req *http.Request) bool {
@@ -241,7 +238,7 @@ func (c *Client) Exec(req *http.Request, entity interface{}, opts ...Option) (*h
 func (c *Client) unmarshal(rsp *http.Response, req *http.Request, entity interface{}) error {
 	var ent *Entity
 	if c.isDebug(req) || c.isVerbose(req) {
-		data, err := ioutil.ReadAll(rsp.Body)
+		data, err := io.ReadAll(rsp.Body)
 		if err != nil {
 			return err
 		}
@@ -249,7 +246,7 @@ func (c *Client) unmarshal(rsp *http.Response, req *http.Request, entity interfa
 			ContentType: rsp.Header.Get("Content-Type"),
 			Data:        data,
 		}
-		rsp.Body = ioutil.NopCloser(bytes.NewBuffer(data))
+		rsp.Body = io.NopCloser(bytes.NewBuffer(data))
 	}
 	err := Unmarshal(rsp, entity)
 	if err != nil {
@@ -321,19 +318,9 @@ func (c *Client) RoundTrip(req *http.Request) (*http.Response, error) {
 		fmt.Printf("api: [%06d] %v %v\n", reqid, req.Method, req.URL)
 	}
 	if c.isDebug(req) {
-		b := &bytes.Buffer{}
-		req.Header.Write(b)
-		fmt.Println(text.Indent(string(b.Bytes()), "   - "))
-		if c.isVerbose(req) && req.Body != nil {
-			defer req.Body.Close()
-			d, err := ioutil.ReadAll(req.Body)
-			if err != nil {
-				return nil, err
-			}
-			req.Body = ioutil.NopCloser(bytes.NewBuffer(d))
-			if len(d) > 0 {
-				fmt.Println(text.Indent(string(d), "   > "))
-			}
+		err := c.dumpReq(os.Stdout, req)
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -418,20 +405,10 @@ retries:
 		}
 		fmt.Printf("api: [%06d] %v %v -> %v (%v)\n", reqid, req.Method, req.URL, rsp.Status, l)
 	}
-
 	if c.isDebug(req) {
-		b := &bytes.Buffer{}
-		rsp.Header.Write(b)
-		fmt.Println(text.Indent(string(b.Bytes()), "   - "))
-		if c.isVerbose(req) {
-			d, err := ioutil.ReadAll(rsp.Body)
-			if err != nil {
-				return nil, err
-			}
-			if len(d) > 0 {
-				fmt.Println(text.Indent(string(d), "   < "))
-			}
-			rsp.Body = ioutil.NopCloser(bytes.NewBuffer(d))
+		err := c.dumpRsp(os.Stdout, req, rsp)
+		if err != nil {
+			return nil, err
 		}
 	}
 
