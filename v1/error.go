@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 )
 
@@ -13,6 +13,17 @@ var (
 	ErrUnexpectedStatusCode      = errors.New("Unexpected status code")
 	ErrCouldNotAuthorize         = errors.New("Could not authorize request")
 	ErrCouldNotUnmarshalResponse = errors.New("Could not unmarshal response")
+)
+
+// Sentinal errors are wrapped to provide a simpler test for common conditions
+// that are related to response status codes.
+var (
+	ErrNotFound            = errors.New("Not found")
+	ErrBadRequest          = errors.New("Bad request")
+	ErrUnauthorized        = errors.New("Unauthorized")
+	ErrForbidden           = errors.New("Forbidden")
+	ErrUnprocessableEntity = errors.New("Unprocessable entity")
+	ErrInternalServerError = errors.New("Internal server error")
 )
 
 var RecoverableStatuses = []int{
@@ -47,7 +58,23 @@ func isSuccess(status int) bool {
 
 func checkErr(reqid int64, req *http.Request, rsp *http.Response) error {
 	if !isSuccess(rsp.StatusCode) {
-		return Errorf(rsp.StatusCode, "Unexpected status code: %d %s", rsp.StatusCode, http.StatusText(rsp.StatusCode)).SetId(reqid).SetRequest(req).SetEntityFromResponse(rsp)
+		err := Errorf(rsp.StatusCode, "Unexpected status code: %d %s", rsp.StatusCode, http.StatusText(rsp.StatusCode)).SetId(reqid).SetRequest(req).SetEntityFromResponse(rsp)
+		// Wrap a sentinel error for common status codes, which makes this error easier to test for
+		switch rsp.StatusCode {
+		case http.StatusBadRequest:
+			err.SetCause(ErrBadRequest)
+		case http.StatusUnauthorized:
+			err.SetCause(ErrUnauthorized)
+		case http.StatusForbidden:
+			err.SetCause(ErrForbidden)
+		case http.StatusNotFound:
+			err.SetCause(ErrNotFound)
+		case http.StatusUnprocessableEntity:
+			err.SetCause(ErrUnprocessableEntity)
+		case http.StatusInternalServerError:
+			err.SetCause(ErrInternalServerError)
+		}
+		return err
 	}
 	return nil
 }
@@ -86,7 +113,7 @@ func (e *Error) SetEntity(ent *Entity) *Error {
 }
 
 func (e *Error) SetEntityFromResponse(rsp *http.Response) *Error {
-	data, err := ioutil.ReadAll(rsp.Body)
+	data, err := io.ReadAll(rsp.Body)
 	if err == nil {
 		e.SetEntity(&Entity{
 			ContentType: rsp.Header.Get("Content-Type"),
