@@ -196,6 +196,19 @@ func (c *Client) Put(cxt context.Context, u string, input, output interface{}, o
 	return c.Exec(req.WithContext(cxt), output, opts...)
 }
 
+// A convenience for Exec with a PATCH request. This is the same as PUT and it is included for the benefit of those misguided APIs that use PATCH operations.
+func (c *Client) Patch(cxt context.Context, u string, input, output interface{}, opts ...Option) (*http.Response, error) {
+	data, err := entityReader(c.dctype, input)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest(http.MethodPatch, u, data)
+	if err != nil {
+		return nil, err
+	}
+	return c.Exec(req.WithContext(cxt), output, opts...)
+}
+
 // A convenience for Exec with a DELETE request
 func (c *Client) Delete(cxt context.Context, u string, input, output interface{}, opts ...Option) (*http.Response, error) {
 	data, err := entityReader(c.dctype, input)
