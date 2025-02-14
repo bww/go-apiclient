@@ -283,8 +283,8 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 	rsp, err := c.RoundTrip(req)
 
 	if err != nil {
-		obserr = c.obs.RequestFailedWithError(req, rsp, err)
-		if obserr != nil { // we propagate the handler error; the handler should wrap the request error if this is desired
+		obserr = c.obs.DidFailWithError(req, err)
+		if obserr != nil { // we propagate the handler error, which should wrap the request error if this is desired
 			return nil, fmt.Errorf("Failure handler: %w", obserr)
 		}
 	} else {

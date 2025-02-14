@@ -24,12 +24,12 @@ func (o PostflightObserverFunc) DidReceiveResponse(req *http.Request, rsp *http.
 	return o(req, rsp)
 }
 
-type ErrorObserver interface {
-	RequestFailedWithError(req *http.Request, rsp *http.Response, err error) error
+type FailureObserver interface {
+	DidFailWithError(req *http.Request, err error) error
 }
 
-type ErrorObserverFunc func(req *http.Request, rsp *http.Response, err error) error
+type FailureObserverFunc func(req *http.Request, err error) error
 
-func (o ErrorObserverFunc) RequestFailedWithError(req *http.Request, rsp *http.Response, err error) error {
-	return o(req, rsp, err)
+func (o FailureObserverFunc) DidFailWithError(req *http.Request, err error) error {
+	return o(req, err)
 }

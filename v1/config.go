@@ -73,9 +73,9 @@ func WithAuthorizer(auth Authorizer) Option {
 	}
 }
 
-func WithObservers(obs *events.Observers) Option {
+func WithObservers(obs ...interface{}) Option {
 	return func(c Config) Config {
-		c.Observers = obs
+		c.Observers = events.NewObservers().Add(obs...)
 		return c
 	}
 }
