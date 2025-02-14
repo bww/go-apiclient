@@ -8,7 +8,7 @@ require (
 	github.com/bww/go-metrics v0.1.0
 	github.com/bww/go-ratelimit v0.2.4
 	github.com/bww/go-rest/v2 v2.0.4
-	github.com/bww/go-router/v2 v2.4.3
+	github.com/bww/go-router/v2 v2.5.0
 	github.com/bww/go-util v1.38.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/google/go-querystring v1.1.0
