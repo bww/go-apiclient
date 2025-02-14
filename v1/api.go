@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/bww/go-apiclient/v1/events"
 	"github.com/bww/go-metrics/v1"
 	"github.com/bww/go-ratelimit/v1"
 	errutil "github.com/bww/go-util/v1/errors"
@@ -50,6 +51,7 @@ var sharedClient = &http.Client{
 type Client struct {
 	*http.Client
 	auth    Authorizer
+	obs     *events.Observers
 	limiter ratelimit.Limiter
 	retry   map[int]struct{}
 	backoff time.Duration
@@ -108,6 +110,7 @@ func NewWithConfig(conf Config) (*Client, error) {
 	return &Client{
 		Client:  client,
 		auth:    conf.Authorizer,
+		obs:     conf.Observers,
 		limiter: conf.RateLimiter,
 		retry:   retry,
 		backoff: conf.RetryDelay,
@@ -123,15 +126,9 @@ func (c *Client) Base() *url.URL {
 }
 
 func (c *Client) WithBase(b *url.URL) *Client {
-	return &Client{
-		Client:  c.Client,
-		auth:    c.auth,
-		limiter: c.limiter,
-		base:    b,
-		header:  c.header,
-		dctype:  c.dctype,
-		debug:   c.debug,
-	}
+	d := *c
+	d.base = b
+	return &d
 }
 
 func (c *Client) Authorizer() Authorizer {
@@ -139,15 +136,20 @@ func (c *Client) Authorizer() Authorizer {
 }
 
 func (c *Client) WithAuthorizer(a Authorizer) *Client {
-	return &Client{
-		Client:  c.Client,
-		auth:    a,
-		limiter: c.limiter,
-		base:    c.base,
-		header:  c.header,
-		dctype:  c.dctype,
-		debug:   c.debug,
-	}
+	d := *c
+	d.auth = a
+	return &d
+}
+
+func (c *Client) Observers() *events.Observers {
+	return c.obs
+}
+
+func (c *Client) WithObservers(o *events.Observers) *Client {
+	d := *c
+	d.obs = o
+	return &d
+
 }
 
 func (c *Client) isVerbose(req *http.Request) bool {
@@ -273,7 +275,26 @@ func (c *Client) unmarshal(rsp *http.Response, req *http.Request, entity interfa
 
 // Perform a request. The client may mutate the parameter request.
 func (c *Client) Do(req *http.Request) (*http.Response, error) {
-	return c.RoundTrip(req)
+	obserr := c.obs.WillSendRequest(req)
+	if obserr != nil {
+		return nil, fmt.Errorf("Preflight handler: %w", obserr)
+	}
+
+	rsp, err := c.RoundTrip(req)
+
+	if err != nil {
+		obserr = c.obs.DidFailWithError(req, err)
+		if obserr != nil { // we propagate the handler error, which should wrap the request error if this is desired
+			return nil, fmt.Errorf("Failure handler: %w", obserr)
+		}
+	} else {
+		obserr = c.obs.DidReceiveResponse(req, rsp)
+		if obserr != nil {
+			return nil, fmt.Errorf("Postflight handler: %w", obserr)
+		}
+	}
+
+	return rsp, err
 }
 
 // Route-trip a request. The client may mutate the parameter request.

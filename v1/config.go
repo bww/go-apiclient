@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/bww/go-apiclient/v1/events"
 	"github.com/bww/go-ratelimit/v1"
 )
 
@@ -46,6 +47,7 @@ type Config struct {
 	Timeout     time.Duration
 	Client      *http.Client
 	Authorizer  Authorizer
+	Observers   *events.Observers
 	RateLimiter ratelimit.Limiter
 	RetryStatus []int
 	RetryDelay  time.Duration
@@ -67,6 +69,13 @@ type Option func(Config) Config
 func WithAuthorizer(auth Authorizer) Option {
 	return func(c Config) Config {
 		c.Authorizer = auth
+		return c
+	}
+}
+
+func WithObservers(obs ...interface{}) Option {
+	return func(c Config) Config {
+		c.Observers = events.NewObservers().Add(obs...)
 		return c
 	}
 }
