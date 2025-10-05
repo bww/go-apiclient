@@ -41,7 +41,7 @@ func sanitizeHeaders(hdr http.Header, allowed func(string) bool) http.Header {
 func (c *Client) dumpReq(w io.Writer, req *http.Request) error {
 	b := &bytes.Buffer{}
 	sanitizeHeaders(req.Header, defaultAllowHeader).Write(b)
-	fmt.Println(text.Indent(string(b.Bytes()), "   - "))
+	fmt.Println(text.Indent(b.String(), "   - "))
 	if c.isVerbose(req) && req.Body != nil {
 		defer req.Body.Close()
 		d, err := io.ReadAll(req.Body)
@@ -59,7 +59,7 @@ func (c *Client) dumpReq(w io.Writer, req *http.Request) error {
 func (c *Client) dumpRsp(w io.Writer, req *http.Request, rsp *http.Response) error {
 	b := &bytes.Buffer{}
 	sanitizeHeaders(rsp.Header, defaultAllowHeader).Write(b)
-	fmt.Println(text.Indent(string(b.Bytes()), "   - "))
+	fmt.Println(text.Indent(b.String(), "   - "))
 	if c.isVerbose(req) {
 		d, err := io.ReadAll(rsp.Body)
 		if err != nil {

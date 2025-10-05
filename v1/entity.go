@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime"
 	"net/http"
 	"net/url"
@@ -53,20 +52,20 @@ func init() {
 	formDecoder.IgnoreUnknownKeys(true)
 }
 
-func entityReader(ctype string, entity interface{}) (io.ReadCloser, error) {
+func entityReader(ctype string, entity interface{}) (io.Reader, error) {
 	switch v := entity.(type) {
 	case []byte:
-		return ioutil.NopCloser(bytes.NewBuffer(v)), nil
+		return bytes.NewReader(v), nil
 	case io.ReadCloser:
 		return v, nil
 	case io.Reader:
-		return ioutil.NopCloser(v), nil
+		return v, nil
 	default:
 		return Marshal(ctype, entity)
 	}
 }
 
-func Marshal(ctype string, entity interface{}) (io.ReadCloser, error) {
+func Marshal(ctype string, entity interface{}) (io.Reader, error) {
 	if entity == nil {
 		return nil, nil
 	}
@@ -82,7 +81,7 @@ func Marshal(ctype string, entity interface{}) (io.ReadCloser, error) {
 		if err != nil {
 			return nil, err
 		}
-		return ioutil.NopCloser(bytes.NewBuffer(d)), nil
+		return bytes.NewReader(d), nil
 
 	case URLEncoded, Multipart:
 		val := make(url.Values)
@@ -90,7 +89,7 @@ func Marshal(ctype string, entity interface{}) (io.ReadCloser, error) {
 		if err != nil {
 			return nil, err
 		}
-		return ioutil.NopCloser(bytes.NewBuffer([]byte(val.Encode()))), nil
+		return bytes.NewReader([]byte(val.Encode())), nil
 	}
 
 	// second, try marshaling based on the entity's conformance to known interfaces
@@ -100,21 +99,21 @@ func Marshal(ctype string, entity interface{}) (io.ReadCloser, error) {
 		if err != nil {
 			return nil, err
 		}
-		return ioutil.NopCloser(bytes.NewBuffer(val)), nil
+		return bytes.NewReader(val), nil
 
 	case encoding.TextMarshaler:
 		val, err := e.MarshalText()
 		if err != nil {
 			return nil, err
 		}
-		return ioutil.NopCloser(bytes.NewBuffer(val)), nil
+		return bytes.NewReader(val), nil
 
 	case encoding.BinaryMarshaler:
 		val, err := e.MarshalBinary()
 		if err != nil {
 			return nil, err
 		}
-		return ioutil.NopCloser(bytes.NewBuffer(val)), nil
+		return bytes.NewReader(val), nil
 	}
 
 	// couldn't identify a marshaler
@@ -146,7 +145,7 @@ func Unmarshal(rsp *http.Response, entity interface{}) error {
 		return json.NewDecoder(rsp.Body).Decode(entity)
 
 	case URLEncoded, Multipart:
-		data, err := ioutil.ReadAll(rsp.Body)
+		data, err := io.ReadAll(rsp.Body)
 		if err != nil {
 			return err
 		}
@@ -157,7 +156,7 @@ func Unmarshal(rsp *http.Response, entity interface{}) error {
 		return formDecoder.Decode(entity, form)
 
 	case PlainText:
-		val, err := ioutil.ReadAll(rsp.Body)
+		val, err := io.ReadAll(rsp.Body)
 		if err != nil {
 			return err
 		}
@@ -178,7 +177,7 @@ func Unmarshal(rsp *http.Response, entity interface{}) error {
 	// second, try unmarshaling based on the entity's conformance to known interfaces
 	switch e := entity.(type) {
 	case EntityUnmarshaler:
-		val, err := ioutil.ReadAll(rsp.Body)
+		val, err := io.ReadAll(rsp.Body)
 		if err != nil {
 			return err
 		}

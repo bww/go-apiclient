@@ -160,7 +160,7 @@ func TestBurstRateLimit(t *testing.T) {
 		}), nil)
 	}
 
-	dur = time.Now().Sub(start)
+	dur = time.Since(start)
 	fmt.Printf(">>> dur=%v, start=%v, n=%d, c=%d; (%v, %v)\n", dur, start, n, c, (win * time.Duration(c)), windowBound(0, win, c))
 	assert.Equal(t, true, dur >= (win*time.Duration(c)) && dur < (win*time.Duration(c+1)))
 
@@ -180,7 +180,7 @@ func TestBurstRateLimit(t *testing.T) {
 		}), nil)
 	}
 
-	dur = time.Now().Sub(start)
+	dur = time.Since(start)
 	fmt.Printf(">>> dur=%v, start=%v, n=%d, c=%d; (%v, %v)\n", dur, start, n, c, (win * time.Duration(c)), windowBound(0, win, c))
 	assert.Equal(t, true, dur >= (win*time.Duration(c)) && dur < (win*time.Duration(c+1)))
 
@@ -205,7 +205,7 @@ func TestBurstRateLimit(t *testing.T) {
 		api.Get(cxt, "/limited"+params(p), nil)
 	}
 
-	dur = time.Now().Sub(start)
+	dur = time.Since(start)
 	fmt.Printf(">>> dur=%v, start=%v, n=%d, c=%d; (%v, %v)\n", dur, start, n, c, (win * time.Duration(c)), windowBound(0, win, c))
 	assert.Equal(t, true, dur >= (win*time.Duration(c))+bck && dur < (win*time.Duration(c+1))+bck)
 }
@@ -257,10 +257,10 @@ func TestMeterRateLimit(t *testing.T) {
 			"rem": n - (i % (n + 1)),
 			"rst": r,
 		}), nil)
-		sum += time.Now().Sub(s)
+		sum += time.Since(s)
 	}
 
-	dur = time.Now().Sub(start)
+	dur = time.Since(start)
 	del = sum / time.Duration(n*c)
 	avg = win * time.Duration(c) / time.Duration(n*c)
 	fmt.Printf(">>> dur=%v, start=%v, n=%d, c=%d, avg=%v, del=%v\n", dur, start, n, c, avg, del)
@@ -300,10 +300,10 @@ func TestMeterRateLimit(t *testing.T) {
 			"rem": n - (i % (n + 1)),
 			"rst": r,
 		}), nil)
-		sum += time.Now().Sub(s)
+		sum += time.Since(s)
 	}
 
-	dur = time.Now().Sub(start)
+	dur = time.Since(start)
 	del = sum / time.Duration(n*c)
 	avg = max
 	fmt.Printf(">>> dur=%v, start=%v, n=%d, c=%d, avg=%v, del=%v\n", dur, start, n, c, avg, del)

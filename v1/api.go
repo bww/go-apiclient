@@ -334,7 +334,7 @@ func (c *Client) RoundTrip(req *http.Request) (*http.Response, error) {
 		if err != nil {
 			return nil, fmt.Errorf("Could not compute next rate-limited request window: %w", err)
 		}
-		delay := next.Sub(time.Now())
+		delay := time.Until(next)
 		rateLimitDelaySampler.With(metrics.Tags{"domain": domain}).Observe(float64(delay))
 		if delay > 0 {
 			if c.isVerbose(req) {
@@ -380,7 +380,7 @@ retries:
 					if i >= maxRetries {
 						return nil, rlerr
 					}
-					delay := retry.RetryAfter.Sub(time.Now())
+					delay := time.Until(retry.RetryAfter)
 					rateLimitRetrySampler.With(metrics.Tags{"domain": domain}).Observe(float64(delay))
 					if c.isVerbose(req) {
 						fmt.Printf("api: [%06d] %v %v: retrying after %v due to rate limits\n", reqid, req.Method, req.URL, retry.RetryAfter)
