@@ -281,7 +281,6 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 	}
 
 	rsp, err := c.RoundTrip(req)
-
 	if err != nil {
 		obserr = c.obs.DidFailWithError(req, err)
 		if obserr != nil { // we propagate the handler error, which should wrap the request error if this is desired
@@ -348,7 +347,7 @@ func (c *Client) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 	}
 
-	if c.isVerbose(req) || c.isDebug(req) {
+	if c.isVerbose(req) {
 		fmt.Printf("api: [%06d] %v %v\n", reqid, req.Method, req.URL)
 	}
 	if c.isDebug(req) {
@@ -417,6 +416,22 @@ retries:
 			}
 		}
 
+		if c.isVerbose(req) {
+			var l string
+			if tsp.ContentLength >= 0 {
+				l = humanize.Bytes(uint64(tsp.ContentLength))
+			} else {
+				l = "<unknown>"
+			}
+			fmt.Printf("api: [%06d] %v %v -> %v (%v)\n", reqid, req.Method, req.URL, tsp.Status, l)
+		}
+		if c.isDebug(req) {
+			err := c.dumpRsp(os.Stdout, req, tsp)
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		err = checkErr(reqid, req, tsp)
 		if err != nil { // first, check for non-2XX/application-level errors
 			return nil, err
@@ -428,22 +443,6 @@ retries:
 		// the response will be returned; convert it and clear the temporary value
 		rsp, tsp = tsp, nil
 		break
-	}
-
-	if c.isVerbose(req) || c.isDebug(req) {
-		var l string
-		if rsp.ContentLength >= 0 {
-			l = humanize.Bytes(uint64(rsp.ContentLength))
-		} else {
-			l = "<unknown>"
-		}
-		fmt.Printf("api: [%06d] %v %v -> %v (%v)\n", reqid, req.Method, req.URL, rsp.Status, l)
-	}
-	if c.isDebug(req) {
-		err := c.dumpRsp(os.Stdout, req, rsp)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	return rsp, nil
