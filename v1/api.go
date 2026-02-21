@@ -393,7 +393,6 @@ func (c *Client) RoundTrip(req *http.Request) (*http.Response, error) {
 		if err != nil {
 			return nil, err
 		}
-		fmt.Println("  *")
 	}
 
 	var rsp *http.Response
@@ -491,7 +490,6 @@ retries:
 			if err != nil {
 				return nil, err
 			}
-			fmt.Println("  #")
 		}
 
 		err = checkErr(reqid, req, tsp)
