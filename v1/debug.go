@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/bww/go-apiclient/v1/httputil"
 	"github.com/bww/go-util/v1/text"
 )
 
@@ -41,7 +42,7 @@ func sanitizeHeaders(hdr http.Header, allowed func(string) bool) http.Header {
 func (c *Client) dumpReq(w io.Writer, req *http.Request) error {
 	b := &bytes.Buffer{}
 	sanitizeHeaders(req.Header, defaultAllowHeader).Write(b)
-	fmt.Println(text.Indent(b.String(), "   - "))
+	fmt.Println(text.Indent(b.String(), "  > "))
 	if c.isVerbose(req) && req.Body != nil {
 		defer req.Body.Close()
 		d, err := io.ReadAll(req.Body)
@@ -50,7 +51,11 @@ func (c *Client) dumpReq(w io.Writer, req *http.Request) error {
 		}
 		req.Body = io.NopCloser(bytes.NewBuffer(d))
 		if len(d) > 0 {
-			fmt.Fprintln(w, text.Indent(string(d), "   > "))
+			if httputil.IsRequestPrintable(req) {
+				fmt.Fprintln(w, text.Indent(string(d), "  > "))
+			} else {
+				text.Hexdump(text.NewIndentWriter("  > ", 0, w), d, 20)
+			}
 		}
 	}
 	return nil
@@ -59,14 +64,18 @@ func (c *Client) dumpReq(w io.Writer, req *http.Request) error {
 func (c *Client) dumpRsp(w io.Writer, req *http.Request, rsp *http.Response) error {
 	b := &bytes.Buffer{}
 	sanitizeHeaders(rsp.Header, defaultAllowHeader).Write(b)
-	fmt.Println(text.Indent(b.String(), "   - "))
+	fmt.Println(text.Indent(b.String(), "  < "))
 	if c.isVerbose(req) {
 		d, err := io.ReadAll(rsp.Body)
 		if err != nil {
 			return err
 		}
 		if len(d) > 0 {
-			fmt.Fprintln(w, text.Indent(string(d), "   < "))
+			if httputil.IsResponsePrintable(rsp) {
+				fmt.Fprintln(w, text.Indent(string(d), "  < "))
+			} else {
+				text.Hexdump(text.NewIndentWriter("  < ", 0, w), d, 20)
+			}
 		}
 		rsp.Body = io.NopCloser(bytes.NewBuffer(d))
 	}

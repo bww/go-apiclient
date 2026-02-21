@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log/slog"
 	"net/http"
 	"os"
 	"regexp"
@@ -43,6 +44,7 @@ func (d Debug) WithEnv() (Debug, error) {
 
 // Client configuration
 type Config struct {
+	Name        string
 	BaseURL     string
 	Timeout     time.Duration
 	Client      *http.Client
@@ -53,6 +55,7 @@ type Config struct {
 	RetryDelay  time.Duration
 	Header      http.Header
 	ContentType string
+	Logger      *slog.Logger
 	Verbose     bool
 	Debug       bool
 }
@@ -65,6 +68,20 @@ func (c Config) With(opts []Option) Config {
 }
 
 type Option func(Config) Config
+
+func WithName(name string) Option {
+	return func(c Config) Config {
+		c.Name = name
+		return c
+	}
+}
+
+func WithLogger(log *slog.Logger) Option {
+	return func(c Config) Config {
+		c.Logger = log
+		return c
+	}
+}
 
 func WithAuthorizer(auth Authorizer) Option {
 	return func(c Config) Config {

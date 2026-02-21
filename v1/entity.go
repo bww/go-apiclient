@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/bww/go-apiclient/v1/httputil"
 	"github.com/bww/go-util/v1/text"
 	"github.com/dustin/go-humanize"
 	"github.com/gorilla/schema"
@@ -31,7 +32,7 @@ type Entity struct {
 
 func (e Entity) String() string {
 	var d string
-	if isMimetypeBinary(e.ContentType) {
+	if !httputil.IsMimetypePrintable(e.ContentType) {
 		b := &strings.Builder{}
 		text.Hexdump(b, e.Data, 20)
 		d = b.String()
@@ -186,20 +187,4 @@ func Unmarshal(rsp *http.Response, entity interface{}) error {
 
 	// couldn't identify a marshaler
 	return ErrUnsupportedMimetype
-}
-
-func isMimetypeBinary(t string) bool {
-	m, p, err := mime.ParseMediaType(t)
-	if err != nil {
-		return true
-	}
-	if m == "application/json" {
-		return false
-	} else if strings.HasPrefix(m, "text/") {
-		return false
-	} else if _, ok := p["charset"]; ok {
-		return false
-	} else {
-		return true
-	}
 }

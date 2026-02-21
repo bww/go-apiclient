@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -17,6 +18,8 @@ import (
 	"github.com/bww/go-metrics/v1"
 	"github.com/bww/go-ratelimit/v1"
 	errutil "github.com/bww/go-util/v1/errors"
+	"github.com/bww/go-util/v1/ext"
+	"github.com/bww/go-util/v1/text"
 	"github.com/dustin/go-humanize"
 	"github.com/google/go-querystring/query"
 )
@@ -31,6 +34,7 @@ var (
 const (
 	maxRetries     = 3
 	backoffDefault = time.Minute * 3
+	defaultName    = "apiclient"
 )
 
 var reqctr int64
@@ -50,6 +54,7 @@ var sharedClient = &http.Client{
 // An API client
 type Client struct {
 	*http.Client
+	name    string
 	auth    Authorizer
 	obs     *events.Observers
 	limiter ratelimit.Limiter
@@ -58,6 +63,7 @@ type Client struct {
 	base    *url.URL
 	header  http.Header
 	dctype  string
+	log     *slog.Logger
 	debug   Debug
 }
 
@@ -107,8 +113,14 @@ func NewWithConfig(conf Config) (*Client, error) {
 		return nil, err
 	}
 
+	log := ext.Coalesce(conf.Logger, slog.Default())
+	if conf.Name != "" {
+		log = log.With("name", conf.Name)
+	}
+
 	return &Client{
 		Client:  client,
+		name:    text.Coalesce(conf.Name, defaultName),
 		auth:    conf.Authorizer,
 		obs:     conf.Observers,
 		limiter: conf.RateLimiter,
@@ -117,8 +129,13 @@ func NewWithConfig(conf Config) (*Client, error) {
 		base:    base,
 		header:  conf.Header,
 		dctype:  ctype,
+		log:     log,
 		debug:   debug,
 	}, nil
+}
+
+func (c *Client) Log() *slog.Logger {
+	return c.log
 }
 
 func (c *Client) Base() *url.URL {
@@ -327,7 +344,16 @@ func (c *Client) RoundTrip(req *http.Request) (*http.Response, error) {
 	if l := c.limiter; l != nil {
 		if c.isVerbose(req) {
 			state := c.limiter.State(start)
-			fmt.Printf("api: [%06d] %v %v: rate limit state: limit=%d, remaining=%d, reset=%v (in %v)\n", reqid, req.Method, req.URL, state.Limit, state.Remaining, state.Reset, state.Reset.Sub(start))
+			c.log.Info(
+				"rate limit state",
+				"reqid", reqid,
+				"method", req.Method,
+				"url", req.URL,
+				"limit", state.Limit,
+				"remaining", state.Remaining,
+				"reset_at", state.Reset,
+				"reset_in", state.Reset.Sub(start),
+			)
 		}
 		next, err := l.Next(start, ratelimit.WithRequest(req))
 		if err != nil {
@@ -337,7 +363,13 @@ func (c *Client) RoundTrip(req *http.Request) (*http.Response, error) {
 		rateLimitDelaySampler.With(metrics.Tags{"domain": domain}).Observe(float64(delay))
 		if delay > 0 {
 			if c.isVerbose(req) {
-				fmt.Printf("api: [%06d] %v %v: delaying %v for rate limits\n", reqid, req.Method, req.URL, delay)
+				c.log.Info(
+					"delaying for rate limits",
+					"reqid", reqid,
+					"method", req.Method,
+					"url", req.URL,
+					"delay", delay,
+				)
 			}
 			select {
 			case <-time.After(delay):
@@ -348,13 +380,20 @@ func (c *Client) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	if c.isVerbose(req) {
-		fmt.Printf("api: [%06d] %v %v\n", reqid, req.Method, req.URL)
+		c.log.Info(
+			"req",
+			"reqid", reqid,
+			"method", req.Method,
+			"url", req.URL,
+		)
+		fmt.Printf("%s: [%06d] %v %v\n", c.name, reqid, req.Method, req.URL)
 	}
 	if c.isDebug(req) {
 		err := c.dumpReq(os.Stdout, req)
 		if err != nil {
 			return nil, err
 		}
+		fmt.Println("  *")
 	}
 
 	var rsp *http.Response
@@ -382,7 +421,13 @@ retries:
 					delay := time.Until(retry.RetryAfter)
 					rateLimitRetrySampler.With(metrics.Tags{"domain": domain}).Observe(float64(delay))
 					if c.isVerbose(req) {
-						fmt.Printf("api: [%06d] %v %v: retrying after %v due to rate limits\n", reqid, req.Method, req.URL, retry.RetryAfter)
+						c.log.Info(
+							"retrying after rate limit delay",
+							"reqid", reqid,
+							"method", req.Method,
+							"url", req.URL,
+							"delay", retry.RetryAfter,
+						)
 					}
 					select {
 					case <-time.After(delay):
@@ -405,7 +450,14 @@ retries:
 				delay = delay * time.Duration(i+1) // progressive backoff
 				failureRetrySampler.With(metrics.Tags{"domain": domain}).Observe(float64(delay))
 				if c.isVerbose(req) {
-					fmt.Printf("api: [%06d] %v %v: retrying after %v due to recoverable failure: %s\n", reqid, req.Method, req.URL, delay, tsp.Status)
+					c.log.Info(
+						"retrying after recoverable failure",
+						"reqid", reqid,
+						"method", req.Method,
+						"url", req.URL,
+						"status", tsp.Status,
+						"delay", delay,
+					)
 				}
 				select {
 				case <-time.After(delay):
@@ -423,13 +475,23 @@ retries:
 			} else {
 				l = "<unknown>"
 			}
-			fmt.Printf("api: [%06d] %v %v -> %v (%v)\n", reqid, req.Method, req.URL, tsp.Status, l)
+			c.log.Info(
+				"rsp",
+				"reqid", reqid,
+				"method", req.Method,
+				"url", req.URL,
+				"status", tsp.Status,
+				"bytes", tsp.ContentLength,
+				"length", l,
+			)
+			fmt.Printf("%s: [%06d] %v %v -> %v (%v)\n", c.name, reqid, req.Method, req.URL, tsp.Status, l)
 		}
 		if c.isDebug(req) {
 			err := c.dumpRsp(os.Stdout, req, tsp)
 			if err != nil {
 				return nil, err
 			}
+			fmt.Println("  #")
 		}
 
 		err = checkErr(reqid, req, tsp)

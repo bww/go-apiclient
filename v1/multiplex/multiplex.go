@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"sort"
@@ -26,6 +27,7 @@ func nextReq() uint64 {
 type Config struct {
 	Errors  ErrorHandler
 	Headers map[string]string
+	Logger  *slog.Logger
 	Verbose bool
 	Debug   bool
 }
@@ -172,6 +174,7 @@ type Mux struct {
 	*api.Client
 	concur  int
 	errors  ErrorHandler
+	log     *slog.Logger
 	verbose bool
 	debug   bool
 }
@@ -180,6 +183,7 @@ func New(c *api.Client, n int) *Mux {
 	return &Mux{
 		Client:  c,
 		concur:  max(1, n),
+		log:     c.Log(),
 		verbose: os.Getenv("VERBOSE_API_MUX") != "",
 		debug:   os.Getenv("DEBUG_API_MUX") != "",
 	}
@@ -190,9 +194,10 @@ func block(cxt context.Context, conf Config, mux *Mux, i int, req *http.Request,
 	reqid := nextReq()
 	errh := ext.Coalesce(conf.Errors, mux.errors)
 	return func() error {
+		log := conf.Logger.With("reqid", reqid, "mux", i, "method", req.Method, "url", req.URL)
 		start := time.Now()
-		if mux.debug && mux.verbose {
-			fmt.Printf("api: mux: [%06d, %d] >>> %s %v\n", reqid, i, req.Method, req.URL)
+		if mux.verbose {
+			log.Info("mux: request")
 		}
 		rsp, err := mux.Client.Do(req.WithContext(cxt))
 		if err != nil && errh != nil { // let the error handler process first if we have one
@@ -203,8 +208,12 @@ func block(cxt context.Context, conf Config, mux *Mux, i int, req *http.Request,
 		} else if rsp == nil {
 			return nil // error handler consumed response
 		}
-		if mux.debug {
-			fmt.Printf("api: mux: [%06d, %d] <<< %s %v: %s in %v\n", reqid, i, req.Method, req.URL, rsp.Status, time.Now().Sub(start))
+		if mux.verbose {
+			log.Info(
+				"mux: response",
+				"status", rsp.Status,
+				"duration", time.Since(start),
+			)
 		}
 		return iter.Write(&Result{
 			Index:    i,
