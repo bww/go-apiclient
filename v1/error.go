@@ -9,10 +9,11 @@ import (
 )
 
 var (
-	ErrUnsupportedMimetype       = errors.New("Unsupported content type")
-	ErrUnexpectedStatusCode      = errors.New("Unexpected status code")
-	ErrCouldNotAuthorize         = errors.New("Could not authorize request")
-	ErrCouldNotUnmarshalResponse = errors.New("Could not unmarshal response")
+	ErrUnsupportedMimetype        = errors.New("Unsupported content type")
+	ErrUnsupportedContentEncoding = errors.New("Unsupported content encoding")
+	ErrUnexpectedStatusCode       = errors.New("Unexpected status code")
+	ErrCouldNotAuthorize          = errors.New("Could not authorize request")
+	ErrCouldNotUnmarshalResponse  = errors.New("Could not unmarshal response")
 )
 
 // Sentinal errors are wrapped to provide a simpler test for common conditions

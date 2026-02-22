@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
@@ -35,6 +36,11 @@ const (
 	maxRetries     = 3
 	backoffDefault = time.Minute * 3
 	defaultName    = "apiclient"
+)
+
+var (
+	headerContentEncoding = http.CanonicalHeaderKey("Content-Encoding")
+	headerAcceptEncoding  = http.CanonicalHeaderKey("Accept-Encoding")
 )
 
 var reqctr int64
@@ -317,6 +323,7 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 func (c *Client) RoundTrip(req *http.Request) (*http.Response, error) {
 	start := time.Now()
 	reqid := atomic.AddInt64(&reqctr, 1)
+	log := c.log.With("reqid", fmt.Sprintf("%06d", reqid), "method", req.Method, "url", req.URL)
 	cxt := req.Context()
 
 	if c.base != nil {
@@ -341,14 +348,18 @@ func (c *Client) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 	}
 
+	// this may overwrite a client-provided header; we don't care, this framework
+	// is responsible for content encodings
+	if val, set := req.Header[headerAcceptEncoding]; set {
+		log.Warn("overwriting accept-encoding header", "previous", val)
+	}
+	req.Header[headerAcceptEncoding] = []string{"gzip"}
+
 	if l := c.limiter; l != nil {
 		if c.isVerbose(req) {
 			state := c.limiter.State(start)
-			c.log.Info(
+			log.Info(
 				"rate limit state",
-				"reqid", reqid,
-				"method", req.Method,
-				"url", req.URL,
 				"limit", state.Limit,
 				"remaining", state.Remaining,
 				"reset_at", state.Reset,
@@ -363,11 +374,8 @@ func (c *Client) RoundTrip(req *http.Request) (*http.Response, error) {
 		rateLimitDelaySampler.With(metrics.Tags{"domain": domain}).Observe(float64(delay))
 		if delay > 0 {
 			if c.isVerbose(req) {
-				c.log.Info(
+				log.Info(
 					"delaying for rate limits",
-					"reqid", reqid,
-					"method", req.Method,
-					"url", req.URL,
 					"delay", delay,
 				)
 			}
@@ -380,12 +388,7 @@ func (c *Client) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	if c.isVerbose(req) {
-		c.log.Info(
-			"req",
-			"reqid", reqid,
-			"method", req.Method,
-			"url", req.URL,
-		)
+		log.Info("req")
 		fmt.Printf("%s: [%06d] %v %v\n", c.name, reqid, req.Method, req.URL)
 	}
 	if c.isDebug(req) {
@@ -408,6 +411,24 @@ retries:
 			}
 		}()
 
+		// if a content encoding is specificed, we automatically unwrap it and
+		// remove the header.
+		if enc := tsp.Header.Get(headerContentEncoding); enc != "" {
+			var err error
+			switch enc {
+			case "gzip":
+				tsp.Body, err = gzip.NewReader(tsp.Body)
+			default:
+				return nil, fmt.Errorf("%w: %s", ErrUnsupportedContentEncoding, enc)
+			}
+			if err != nil { // this is not recoverable
+				return nil, err
+			}
+			// once we've unwrapped the content, remove the encoding header
+			tsp.Header.Del(headerContentEncoding)
+			log.Debug("unwrapped entity content", "encoding", enc)
+		}
+
 		var rlerr error
 		if l := c.limiter; l != nil {
 			rlerr = l.Update(start, ratelimit.WithResponse(tsp)) // first, update rate limiter state to avoid an error response going unaccounted for
@@ -420,11 +441,8 @@ retries:
 					delay := time.Until(retry.RetryAfter)
 					rateLimitRetrySampler.With(metrics.Tags{"domain": domain}).Observe(float64(delay))
 					if c.isVerbose(req) {
-						c.log.Info(
+						log.Info(
 							"retrying after rate limit delay",
-							"reqid", reqid,
-							"method", req.Method,
-							"url", req.URL,
 							"delay", retry.RetryAfter,
 						)
 					}
@@ -449,11 +467,8 @@ retries:
 				delay = delay * time.Duration(i+1) // progressive backoff
 				failureRetrySampler.With(metrics.Tags{"domain": domain}).Observe(float64(delay))
 				if c.isVerbose(req) {
-					c.log.Info(
+					log.Info(
 						"retrying after recoverable failure",
-						"reqid", reqid,
-						"method", req.Method,
-						"url", req.URL,
 						"status", tsp.Status,
 						"delay", delay,
 					)
@@ -474,11 +489,8 @@ retries:
 			} else {
 				l = "<unknown>"
 			}
-			c.log.Info(
+			log.Info(
 				"rsp",
-				"reqid", reqid,
-				"method", req.Method,
-				"url", req.URL,
 				"status", tsp.Status,
 				"bytes", tsp.ContentLength,
 				"length", l,

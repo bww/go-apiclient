@@ -30,15 +30,18 @@ func isEntityPrintable(hdr http.Header) bool {
 func IsMimetypePrintable(t string) bool {
 	m, p, err := mime.ParseMediaType(t)
 	if err != nil {
-		return true
+		return false // if the mimetype is invalid, we assume it's not printable
 	}
-	if m == "application/json" {
-		return false
-	} else if strings.HasPrefix(m, "text/") {
-		return false
-	} else if _, ok := p["charset"]; ok {
-		return false
-	} else {
-		return true
+	switch {
+	case m == "application/json":
+		return true // this is a special case
+	case m == "application/x-www-form-urlencoded":
+		return true // this is a special case
+	case strings.HasPrefix(m, "text/"):
+		return true // if it's text, it's printable
+	case p["charset"] != "":
+		return true // if a charset is defined, it's printable
+	default:
+		return false // otherwise, we must assume it's not printable
 	}
 }
