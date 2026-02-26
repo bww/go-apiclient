@@ -194,10 +194,10 @@ func block(cxt context.Context, conf Config, mux *Mux, i int, req *http.Request,
 	reqid := nextReq()
 	errh := ext.Coalesce(conf.Errors, mux.errors)
 	return func() error {
-		log := conf.Logger.With("reqid", reqid, "mux", i, "method", req.Method, "url", req.URL)
+		log := mux.log.With("reqid", reqid, "mux", i, "method", req.Method, "url", req.URL)
 		start := time.Now()
 		if mux.verbose {
-			log.Info("mux: request")
+			log.Info("mux:req")
 		}
 		rsp, err := mux.Client.Do(req.WithContext(cxt))
 		if err != nil && errh != nil { // let the error handler process first if we have one
@@ -210,7 +210,7 @@ func block(cxt context.Context, conf Config, mux *Mux, i int, req *http.Request,
 		}
 		if mux.verbose {
 			log.Info(
-				"mux: response",
+				"mux:rsp",
 				"status", rsp.Status,
 				"duration", time.Since(start),
 			)

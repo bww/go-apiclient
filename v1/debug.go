@@ -8,7 +8,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/bww/go-apiclient/v1/httputil"
+	httputil "github.com/bww/go-util/v1/net/http"
 	"github.com/bww/go-util/v1/text"
 )
 
